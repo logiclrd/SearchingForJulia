@@ -15,6 +15,10 @@ class Program
 
 	const double FlashlightImageSize = 0.1;
 
+	const int MaxIterations = 30;
+
+	const bool Traces = true;
+
 	static void Main()
 	{
 		var flashlightImage = new Image(64, 64);
@@ -80,6 +84,8 @@ class Program
 					B1 * Math.Cos(G1 * t) + B2 * Math.Sin(G2 * t));
 			}
 
+			Queue<Rectangle> flashlightBoxes = new Queue<Rectangle>();
+
 			while (true)
 			{
 				// Advance flashlight along path
@@ -91,10 +97,16 @@ class Program
 				double flashlightX = flashlightPt.Real;
 				double flashlightY = flashlightPt.Imaginary;
 
-				double flashlightX1 = flashlightX - 0.5 * FlashlightImageSize;
-				double flashlightY1 = flashlightY - 0.5 * FlashlightImageSize;
-				double flashlightX2 = flashlightX + 0.5 * FlashlightImageSize;
-				double flashlightY2 = flashlightY + 0.5 * FlashlightImageSize;
+				var flashlightBox = new Rectangle(
+					flashlightX - 0.5 * FlashlightImageSize,
+					flashlightY - 0.5 * FlashlightImageSize,
+					flashlightX + 0.5 * FlashlightImageSize,
+					flashlightY + 0.5 * FlashlightImageSize);
+
+				if (flashlightBoxes.Count == MaxIterations)
+					flashlightBoxes.Dequeue();
+
+				flashlightBoxes.Enqueue(flashlightBox);
 
 				t += 0.02;
 
@@ -116,7 +128,7 @@ class Program
 						// One iteration for "free"
 						z = z * z + flashlightPt;
 
-						for (int iters = 0; iters < 30; iters++)
+						foreach (var iterBox in flashlightBoxes)
 						{
 							z = z * z + flashlightPt;
 
@@ -126,11 +138,11 @@ class Program
 							double xx = z.Real;
 							double yy = z.Imaginary;
 
-							if ((xx >= flashlightX1) && (xx <= flashlightX2)
-							 && (yy >= flashlightY1) && (yy <= flashlightY2))
+							var box = Traces ? iterBox : flashlightBox;
+
+							if (box.Contains(z))
 							{
-								double px = (xx - flashlightX1) * FR;
-								double py = (yy - flashlightY1) * FR;
+								var (px, py) = box.GetNormalizedPoint(z);
 
 								int pxi = (int)(px * flashlightImage.Width);
 								int pyi = (int)(py * flashlightImage.Height);
