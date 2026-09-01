@@ -1,5 +1,4 @@
-﻿using System.IO.Compression;
-using System.Numerics;
+﻿using System.Numerics;
 
 using SkiaSharp;
 
@@ -18,6 +17,8 @@ class Program
 	const int MaxIterations = 30;
 
 	const bool Traces = true;
+
+	const double ReflectionRatio = 0.95;
 
 	static void Main()
 	{
@@ -64,10 +65,10 @@ class Program
 
 			var rnd = new Random();
 
-			double A1 = rnd.NextDouble() * 0.06 + 0.01;
-			double A2 = rnd.NextDouble() * 0.06 + 0.01;
-			double B1 = rnd.NextDouble() * 0.06 + 0.01;
-			double B2 = rnd.NextDouble() * 0.06 + 0.01;
+			double A1 = 0.5 * (rnd.NextDouble() + 1);
+			double A2 = 0.5 * (rnd.NextDouble() + 1);
+			double B1 = 0.5 * (rnd.NextDouble() + .6);
+			double B2 = 0.5 * (rnd.NextDouble() + .6);
 
 			double F1 = rnd.NextDouble() * 3 + 7;
 			double F2 = rnd.NextDouble() * 3 + F1;
@@ -77,22 +78,23 @@ class Program
 			Complex Cardioid(double t)
 				=> 0.25 * (2 * Complex.Exp(new Complex(0, t)) - Complex.Exp(new Complex(0, 2 * t)));
 
-			Complex Deviation(double t)
+			Complex FlashlightPosition(double t)
 			{
 				return new Complex(
 					A1 * Math.Sin(F1 * t) + A2 * Math.Cos(F2 * t),
 					B1 * Math.Cos(G1 * t) + B2 * Math.Sin(G2 * t));
 			}
 
-			Queue<Rectangle> flashlightBoxes = new Queue<Rectangle>();
+			var flashlightBoxes = new Rectangle[MaxIterations];
+
+			int newestFlashlightBoxIndex = 0;
 
 			while (true)
 			{
 				// Advance flashlight along path
-				var c = Cardioid(t);
-				var d = Deviation(t);
+				var c = Cardioid(t * .01);
 
-				var flashlightPt = c + d;
+				var flashlightPt = FlashlightPosition(t);
 
 				double flashlightX = flashlightPt.Real;
 				double flashlightY = flashlightPt.Imaginary;
@@ -103,20 +105,19 @@ class Program
 					flashlightX + 0.5 * FlashlightImageSize,
 					flashlightY + 0.5 * FlashlightImageSize);
 
-				if (flashlightBoxes.Count == MaxIterations)
-					flashlightBoxes.Dequeue();
+				newestFlashlightBoxIndex--;
+				if (newestFlashlightBoxIndex < 0)
+					newestFlashlightBoxIndex = MaxIterations - 1;
 
-				flashlightBoxes.Enqueue(flashlightBox);
+				flashlightBoxes[newestFlashlightBoxIndex] = flashlightBox;
 
-				t += 0.02;
+				t += 0.005;
 
 				// Draw frame
 				frameCanvas.Clear();
 
 				const double XR = (OutputX2 - OutputX1) / OutputWidth;
 				const double YR = (OutputY2 - OutputY1) / OutputHeight;
-
-				const double FR = 1.0 / FlashlightImageSize;
 
 				for (int y=0; y < OutputHeight; y++)
 					for (int x=0; x < OutputWidth; x++)
@@ -125,20 +126,20 @@ class Program
 							real: x * XR + OutputX1,
 							imaginary: OutputY2 - y * YR);
 
-						// One iteration for "free"
-						z = z * z + flashlightPt;
+						double reflectionIntensity = 1.0;
 
-						foreach (var iterBox in flashlightBoxes)
+						var flashlightIndex = newestFlashlightBoxIndex;
+
+						for (int iter = 0; iter < MaxIterations; iter++)
 						{
-							z = z * z + flashlightPt;
-
-							if (z.Real > 4.8)
-								break;
-
 							double xx = z.Real;
 							double yy = z.Imaginary;
 
-							var box = Traces ? iterBox : flashlightBox;
+							var box = Traces ? flashlightBoxes[flashlightIndex] : flashlightBox;
+
+							flashlightIndex++;
+							if (flashlightIndex >= MaxIterations)
+								flashlightIndex = 0;
 
 							if (box.Contains(z))
 							{
@@ -154,11 +155,20 @@ class Program
 
 									if (colour.Alpha > 0)
 									{
+										colour = ScaleColour(colour, reflectionIntensity);
+
 										frameCanvas.DrawPoint(x, y, colour);
 										break;
 									}
 								}
 							}
+
+							z = z * z + c;
+
+							if (z.Real > 4.8)
+								break;
+
+							reflectionIntensity *= ReflectionRatio;
 						}
 					}
 
@@ -175,5 +185,14 @@ class Program
 					frameBitmap.Encode(frameStream, SKEncodedImageFormat.Png, default);
 			}
 		}
+	}
+
+	static SKColor ScaleColour(SKColor colour, double magnitude)
+	{
+		byte r = (byte)double.Clamp(Math.Round(colour.Red * magnitude, MidpointRounding.ToPositiveInfinity), 0, 255);
+		byte g = (byte)double.Clamp(Math.Round(colour.Green * magnitude, MidpointRounding.ToPositiveInfinity), 0, 255);
+		byte b = (byte)double.Clamp(Math.Round(colour.Blue * magnitude, MidpointRounding.ToPositiveInfinity), 0, 255);
+
+		return new SKColor(r, g, b);
 	}
 }
