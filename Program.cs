@@ -16,9 +16,13 @@ class Program
 
 	const int MaxIterations = 30;
 
-	const bool Traces = true;
+	const bool Traces = false;
 
-	const double ReflectionRatio = 0.95;
+	const bool CombineFlashlightAndParameterTrajectory = false;
+
+	// These are just defaults, tweak at will. :-)
+	const double ReflectionRatio = CombineFlashlightAndParameterTrajectory ? 1.0 : 0.95;
+	const double BaseSpeed = CombineFlashlightAndParameterTrajectory ? 0.02 : 0.005;
 
 	static void Main()
 	{
@@ -65,10 +69,23 @@ class Program
 
 			var rnd = new Random();
 
-			double A1 = 0.5 * (rnd.NextDouble() + 1);
-			double A2 = 0.5 * (rnd.NextDouble() + 1);
-			double B1 = 0.5 * (rnd.NextDouble() + .6);
-			double B2 = 0.5 * (rnd.NextDouble() + .6);
+			double A1, A2;
+			double B1, B2;
+
+			if (CombineFlashlightAndParameterTrajectory)
+			{
+				A1 = rnd.NextDouble() * .06 + .01;
+				A2 = rnd.NextDouble() * .06 + .01;
+				B1 = rnd.NextDouble() * .06 + .01;
+				B2 = rnd.NextDouble() * .06 + .01;
+			}
+			else
+			{
+				A1 = 0.5 * (rnd.NextDouble() + 1);
+				A2 = 0.5 * (rnd.NextDouble() + 1);
+				B1 = 0.5 * (rnd.NextDouble() + .6);
+				B2 = 0.5 * (rnd.NextDouble() + .6);
+			}
 
 			double F1 = rnd.NextDouble() * 3 + 7;
 			double F2 = rnd.NextDouble() * 3 + F1;
@@ -91,10 +108,18 @@ class Program
 
 			while (true)
 			{
-				// Advance flashlight along path
-				var c = Cardioid(t * .01);
+				Complex c;
+				Complex flashlightPt;
 
-				var flashlightPt = FlashlightPosition(t);
+				// Advance flashlight along path
+				if (CombineFlashlightAndParameterTrajectory)
+					c = flashlightPt = Cardioid(t) + FlashlightPosition(t);
+				else
+				{
+					c = Cardioid(t * .01);
+
+					flashlightPt = FlashlightPosition(t);
+				}
 
 				double flashlightX = flashlightPt.Real;
 				double flashlightY = flashlightPt.Imaginary;
@@ -111,7 +136,7 @@ class Program
 
 				flashlightBoxes[newestFlashlightBoxIndex] = flashlightBox;
 
-				t += 0.005;
+				t += BaseSpeed;
 
 				// Draw frame
 				frameCanvas.Clear();
@@ -141,7 +166,9 @@ class Program
 							if (flashlightIndex >= MaxIterations)
 								flashlightIndex = 0;
 
-							if (box.Contains(z))
+							bool skipThisIteration = (iter <= 1) && CombineFlashlightAndParameterTrajectory;
+
+							if (!skipThisIteration && box.Contains(z))
 							{
 								var (px, py) = box.GetNormalizedPoint(z);
 
